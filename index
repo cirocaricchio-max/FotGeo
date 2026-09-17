@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Foto Geolocalizzata con Nome</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    body {
+      background-color: #f0f2f5;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .card {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 450px;
+      text-align: center;
+    }
+    h2 {
+      margin-top: 0;
+      color: #1c1e21;
+    }
+    .input-group {
+      margin-bottom: 15px;
+      text-align: left;
+    }
+    label {
+      font-size: 14px;
+      font-weight: bold;
+      color: #4b4f56;
+      display: block;
+      margin-bottom: 5px;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 16px;
+    }
+    video, img {
+      width: 100%;
+      border-radius: 8px;
+      margin-top: 10px;
+      background-color: #000;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      font-weight: bold;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: background 0.2s;
+    }
+    .btn-primary {
+      background-color: #0084ff;
+    }
+    .btn-whatsapp {
+      background-color: #25D366;
+    }
+    button:disabled {
+      background-color: #b0b3b8;
+      cursor: not-allowed;
+    }
+    #status {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #606770;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>Foto Geolocalizzata</h2>
+
+    <!-- Form Nome -->
+    <div class="input-group">
+      <label for="userName">Il tuo Nome e Cognome:</label>
+      <input type="text" id="userName" placeholder="Es. Mario Rossi">
+    </div>
+
+    <!-- Anteprima Fotocamera -->
+    <video id="video" autoplay playsinline></video>
+
+    <!-- Pulsante Scatto -->
+    <button id="btnCapture" class="btn-primary">Scatta Foto + GPS</button>
+    <p id="status"></p>
+
+    <!-- Canvas nascosto per elaborazione grafica -->
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    <!-- Anteprima e Condivisione -->
+    <div id="previewArea" style="display:none;">
+      <h3>Foto Generata</h3>
+      <img id="photoPreview" alt="Foto elaborata">
+      <button id="btnShare" class="btn-whatsapp">Condividi su WhatsApp</button>
+    </div>
+  </div>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const photoPreview = document.getElementById('photoPreview');
+    const btnCapture = document.getElementById('btnCapture');
+    const btnShare = document.getElementById('btnShare');
+    const userNameInput = document.getElementById('userName');
+    const previewArea = document.getElementById('previewArea');
+    const statusText = document.getElementById('status');
+
+    let processedImageFile = null;
+    let googleMapsUrl = '';
+
+    // Avvio Fotocamera Posteriore
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+          audio: false
+        });
+        video.srcObject = stream;
+      } catch (err) {
+        statusText.innerText = 'Errore fotocamera: assicurati di usare HTTPS e dare i permessi.';
+      }
+    }
+
+    startCamera();
+
+    // Cattura Foto, GPS e Stampa Dati
+    btnCapture.addEventListener('click', () => {
+      const name = userNameInput.value.trim();
+
+      if (!name) {
+        alert('Inserisci il tuo nome prima di scattare!');
+        return;
+      }
+
+      if (!navigator.geolocation) {
+        alert('Geolocalizzazione non supportata dal tuo browser.');
+        return;
+      }
+
+      btnCapture.disabled = true;
+      statusText.innerText = 'Rilevamento posizione in corso...';
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+          googleMapsUrl = `https://maps.google.com/?q=${lat},${lon}`;
+          
+          const now = new Date();
+          const timestamp = now.toLocaleString('it-IT');
+
+          // Dimensiona Canvas come il video originale
+          canvas.width = video.videoWidth || 1280;
+          canvas.height = video.videoHeight || 720;
+          const ctx = canvas.getContext('2d');
+
+          // 1. Disegna la foto scattata
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          // 2. Disegna una fascia scura in basso per far risaltare il testo
+          const boxHeight = canvas.height * 0.18;
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+          ctx.fillRect(0, canvas.height - boxHeight, canvas.width, boxHeight);
+
+          // 3. Imposta Stile Testo
+          const fontSize = Math.max(16, Math.floor(canvas.height / 30));
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = `bold ${fontSize}px Arial`;
+
+          // 4. Scrivi il Nome, il GPS e la Data sopra la foto
+          const padding = 20;
+          let currentY = canvas.height - boxHeight + fontSize + 10;
+
+          ctx.fillText(`Utente: ${name}`, padding, currentY);
+          currentY += fontSize + 8;
+          
+          ctx.font = `${fontSize * 0.85}px Arial`;
+          ctx.fillText(`GPS: ${lat.toFixed(5)}, ${lon.toFixed(5)}`, padding, currentY);
+          currentY += fontSize + 8;
+
+          ctx.fillText(`Data: ${timestamp}`, padding, currentY);
+
+          // Converti il Canvas in File Immagine
+          canvas.toBlob((blob) => {
+            processedImageFile = new File([blob], `foto_${Date.now()}.jpg`, { type: 'image/jpeg' });
+            photoPreview.src = URL.createObjectURL(blob);
+            
+            previewArea.style.display = 'block';
+            statusText.innerText = 'Foto pronta!';
+            btnCapture.disabled = false;
+
+            // Scroll automatico alla foto
+            previewArea.scrollIntoView({ behavior: 'smooth' });
+          }, 'image/jpeg', 0.95);
+        },
+        (error) => {
+          alert('Impossibile ottenere la posizione GPS: ' + error.message);
+          statusText.innerText = '';
+          btnCapture.disabled = false;
+        },
+        { enableHighAccuracy: true }
+      );
+    });
+
+    // Condivisione WhatsApp
+    btnShare.addEventListener('click', async () => {
+      const name = userNameInput.value.trim();
+      const shareData = {
+        title: 'Foto Geolocalizzata',
+        text: `Foto geolocalizzata inviata da: ${name}\nPosizione Google Maps: ${googleMapsUrl}`,
+        files: [processedImageFile]
+      };
+
+      if (navigator.canShare && navigator.canShare({ files: [processedImageFile] })) {
+        try {
+          await navigator.share(shareData);
+        } catch (err) {
+          if (err.name !== 'AbortError') {
+            console.error('Errore condivisione:', err);
+          }
+        }
+      } else {
+        // Fallback per browser che non supportano la condivisione file
+        const text = encodeURIComponent(`Foto geolocalizzata inviata da: ${name}\nPosizione: ${googleMapsUrl}`);
+        window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+        alert("Il tuo browser non supporta l'invio diretto dell'immagine. Verrà condiviso il testo della posizione.");
+      }
+    });
+  </script>
+</body>
+</html>
